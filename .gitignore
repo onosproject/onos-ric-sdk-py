@@ -1,5 +1,9 @@
+# SPDX-FileCopyrightText: © 2021 Open Networking Foundation <support@opennetworking.org>
+# SPDX-License-Identifier: Apache-2.0
+#
 # Byte-compiled / optimized / DLL files
 __pycache__/
+onos_ric_sdk_py/__pycache__/*
 *.py[cod]
 *$py.class
 
@@ -50,6 +54,7 @@ coverage.xml
 *.py,cover
 .hypothesis/
 .pytest_cache/
+junit-results.xml
 
 # Translations
 *.mo
@@ -102,10 +107,11 @@ celerybeat.pid
 *.sage.py
 
 # Environments
+
 .env
 .venv
 env/
-venv/
+venv*
 ENV/
 env.bak/
 venv.bak/
