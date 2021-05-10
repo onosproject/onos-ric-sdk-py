@@ -63,6 +63,9 @@ blacken: $(VENV_NAME) ## run black on python files to reformat
 twine: # @HELP install twine if not present
 	python -m pip install --upgrade twine
 
+build-tools: # @HELP install the ONOS build tools if needed
+	@if [ ! -d "../build-tools" ]; then cd .. && git clone https://github.com/onosproject/build-tools.git; fi
+
 clean:  ## Remove build/test temp files
 	rm -rf dist junit-results.xml .coverage coverage.xml onos_ric_sdk_python.egg-info .tox
 
