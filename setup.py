@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# SPDX-FileCopyrightText: © 2020 Open Networking Foundation <support@opennetworking.org>
+# SPDX-FileCopyrightText: © 2020 Open Netwoxyzrking Foundation <support@opennetworking.org>
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import absolute_import
