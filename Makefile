@@ -60,11 +60,22 @@ blacken: $(VENV_NAME) ## run black on python files to reformat
   black --version ;\
   black $(PYTHON_FILES)
 
+twine: # @HELP install twine if not present
+	python -m pip install --upgrade twine
+
 clean:  ## Remove build/test temp files
 	rm -rf dist junit-results.xml .coverage coverage.xml onos_ric_sdk_python.egg-info .tox
 
 clean-all: clean ## clean + remove virtualenv
 	rm -rf $(VENV_NAME)
+
+publish: twine # @HELP publish version on github and PyPI
+	BASEDIR=. ./../build-tools/publish-python-version
+	./../build-tools/publish-version ${VERSION}
+	./../build-tools/publish-version go/${VERSION}
+
+jenkins-publish: build-tools jenkins-tools # @HELP Jenkins calls this to publish artifacts
+	../build-tools/release-merge-commit
 
 help: ## Print help for each target
 	@echo  onos-ric-sdk-py make targets
