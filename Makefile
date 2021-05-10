@@ -73,9 +73,8 @@ clean-all: clean ## clean + remove virtualenv
 	rm -rf $(VENV_NAME)
 
 publish: twine # @HELP publish version on github and PyPI
-	BASEDIR=. ./../build-tools/publish-python-version
+	BASEDIR=. PYPI_INDEX=pypi ./../build-tools/publish-python-version
 	./../build-tools/publish-version ${VERSION}
-	./../build-tools/publish-version go/${VERSION}
 
 jenkins-publish: build-tools # @HELP Jenkins calls this to publish artifacts
 	../build-tools/release-merge-commit
