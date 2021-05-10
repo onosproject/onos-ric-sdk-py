@@ -11,6 +11,7 @@ def version():
     with open("VERSION") as f:
         return f.read()
 
+a b c d
 
 def parse_requirements(filename):
     # parse a requirements.txt file, allowing for blank lines and comments
