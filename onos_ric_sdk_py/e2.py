@@ -28,7 +28,7 @@ from onos_api.e2sub.subscription import (
 )
 from onos_api.e2sub.task import E2SubscriptionTaskServiceStub, EventType, Status
 from onos_api.e2t.admin import E2TAdminServiceStub
-from onos_api..e2t.e2 import (  # ResponseStatus,
+from onos_api.e2t.e2 import (  # ResponseStatus,
     ControlAckRequest,
     E2TServiceStub,
     EncodingType,
