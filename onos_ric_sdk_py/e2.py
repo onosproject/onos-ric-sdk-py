@@ -1,5 +1,5 @@
-#!/usr/bin/env python3
-# Copyright 2004-present Facebook. All Rights Reserved.
+# SPDX-FileCopyrightText: © 2021 Open Networking Foundation <support@opennetworking.org>
+# SPDX-License-Identifier: Apache-2.0
 
 import asyncio
 import ssl
@@ -268,4 +268,3 @@ class E2Client(e2.E2Client):
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         self._e2t_channel.close()
         self._e2sub_channel.close()
-
