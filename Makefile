@@ -77,7 +77,7 @@ publish: twine # @HELP publish version on github and PyPI
 	./../build-tools/publish-version ${VERSION}
 	./../build-tools/publish-version go/${VERSION}
 
-jenkins-publish: build-tools jenkins-tools # @HELP Jenkins calls this to publish artifacts
+jenkins-publish: build-tools # @HELP Jenkins calls this to publish artifacts
 	../build-tools/release-merge-commit
 
 help: ## Print help for each target
