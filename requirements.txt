@@ -1,5 +1,5 @@
 # SPDX-FileCopyrightText: © 2020 Open Networking Foundation <support@opennetworking.org>
 # SPDX-License-Identifier: Apache-2.0
-aiomsa
+aiomsa>=0.1.0a4
 betterproto>=2.0.0b3,<3.0
 onos-api
