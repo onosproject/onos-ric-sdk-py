@@ -21,7 +21,7 @@ $(VENV_NAME): requirements.txt
 	$(VIRTUALENV) $@ ;\
   source ./$@/bin/activate ; set -u ;\
   python -m pip install --upgrade pip;\
-  python -m pip install -r requirements.txt tox black pylint flake8 reuse
+  python -m pip install -r requirements.txt tox black pylint flake8 mypy reuse
 	echo "To enter virtualenv, run 'source $@/bin/activate'"
 
 dist: setup.py $(VENV_NAME) ## Create a source distribution
@@ -29,7 +29,7 @@ dist: setup.py $(VENV_NAME) ## Create a source distribution
 	source ./$(VENV_NAME)/bin/activate ; set -u ;\
 	python ./$< sdist
 
-lint: license black pylint flake8 ## run static lint checks
+lint: license black pylint flake8 mypy ## run static lint checks
 
 test: $(VENV_NAME) ## run unit tests with tox
 	source ./$</bin/activate ; set -u ;\
@@ -49,6 +49,11 @@ pylint: $(VENV_NAME) ## pylint check for python 3 compliance
 	source ./$</bin/activate ; set -u ;\
   pylint --version ;\
   pylint --py3k $(PYTHON_FILES)
+
+mypy: $(VENV_NAME) ## run mypy to typecheck
+	source ./$</bin/activate ; set -u ;\
+  mypy --version ;\
+  mypy -p onos_ric_sdk_py
 
 black: $(VENV_NAME) ## run black on python files in check mode
 	source ./$</bin/activate ; set -u ;\
