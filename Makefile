@@ -9,7 +9,7 @@ SHELL = bash -e -o pipefail
 .PHONY: test help
 
 # all files with extensions
-PYTHON_FILES      ?= $(wildcard onos-ric-sdk-py/*.py tests/*.py)
+PYTHON_FILES      ?= $(wildcard onos_ric_sdk_py/*.py tests/*.py)
 
 # tooling
 VIRTUALENV        ?= python3 -m venv
