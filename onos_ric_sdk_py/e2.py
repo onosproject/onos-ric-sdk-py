@@ -3,8 +3,12 @@
 
 from __future__ import absolute_import
 
+<<<<<<< HEAD
 import os
+=======
+>>>>>>> Update E2Client to use et2 v1beta1 API
 import ssl
+import os
 from typing import AsyncIterator, List, Optional, Tuple
 from uuid import uuid4
 
