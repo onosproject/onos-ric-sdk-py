@@ -161,6 +161,17 @@ class E2Client(e2.E2Client):
 
     async def unsubscribe(self, e2_node_id: str, subscription_id: str) -> None:
         client = SubscriptionServiceStub(self._e2t_channel)
+        headers = RequestHeaders(
+            app_id=self._app_id,
+            instance_id=self.INSTANCE_ID,
+            node_id=e2_node_id,
+            service_model=ServiceModel(
+                name=service_model_name, version=service_model_version
+            ),
+            encoding=Encoding.PROTO,
+        )
+
+        await client.unsubscribe(headers=headers, subscription_id=subscription_id)
 
     async def __aenter__(self) -> "E2Client":
         return self
