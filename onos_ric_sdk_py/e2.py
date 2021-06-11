@@ -41,7 +41,7 @@ class Subscription(e2.Subscription):
     def __aiter__(self) -> "Subscription":
         return self
 
-    async def __anext__(self) -> Optional[Tuple[bytes, bytes]]:
+    async def __anext__(self) -> Tuple[bytes, bytes]:
         async for response in self._stream:
             return response.indication.header, response.indication.payload
         else:
