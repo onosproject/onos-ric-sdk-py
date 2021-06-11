@@ -3,8 +3,8 @@
 
 from __future__ import absolute_import
 
-import ssl
 import os
+import ssl
 from typing import AsyncIterator, List, Optional, Tuple
 from uuid import uuid4
 
@@ -62,16 +62,16 @@ class E2Client(e2.E2Client):
     ) -> None:
         self._app_id = app_id
 
-        self._ssl_context = None
+        ssl_context = None
         if ca_path is not None and cert_path is not None and key_path is not None:
-            self._ssl_context = ssl.create_default_context(
+            ssl_context = ssl.create_default_context(
                 ssl.Purpose.SERVER_AUTH, cafile=ca_path
             )
-            self._ssl_context.load_cert_chain(certfile=cert_path, keyfile=key_path)
-            self._ssl_context.check_hostname = not skip_verify
+            ssl_context.load_cert_chain(certfile=cert_path, keyfile=key_path)
+            ssl_context.check_hostname = not skip_verify
 
         e2t_ip, e2t_port = e2t_endpoint.rsplit(":", 1)
-        self._e2t_channel = Channel(e2t_ip, int(e2t_port), ssl=self._ssl_context)
+        self._e2t_channel = Channel(e2t_ip, int(e2t_port), ssl=ssl_context)
 
     async def list_nodes(self, oid: Optional[str] = None) -> List[models.E2Node]:
         nodes = []
