@@ -8,10 +8,10 @@ import ssl
 from typing import AsyncIterator, List, Optional, Tuple
 from uuid import uuid4
 
-from aiomsa import e2, models
+import aiomsa.abc
 from grpclib.client import Channel
 from onos_api.e2t.admin import E2TAdminServiceStub
-from onos_api.e2t.e2.v1beta1 import (
+from onos_api.e2t.aiomsa.abc.v1beta1 import (
     Action,
     ActionType,
     ControlMessage,
@@ -29,7 +29,7 @@ from onos_api.e2t.e2.v1beta1 import (
 )
 
 
-class Subscription(e2.Subscription):
+class Subscription(aiomsa.abc.Subscription):
     def __init__(self, id: str, stream: AsyncIterator[SubscribeResponse]) -> None:
         self._id = id
         self._stream = stream
@@ -48,7 +48,7 @@ class Subscription(e2.Subscription):
             raise StopAsyncIteration
 
 
-class E2Client(e2.E2Client):
+class E2Client(aiomsa.abc.E2Client):
     INSTANCE_ID = os.getenv("HOSTNAME", "")
 
     def __init__(
@@ -73,7 +73,7 @@ class E2Client(e2.E2Client):
         e2t_ip, e2t_port = e2t_endpoint.rsplit(":", 1)
         self._e2t_channel = Channel(e2t_ip, int(e2t_port), ssl=ssl_context)
 
-    async def list_nodes(self, oid: Optional[str] = None) -> List[models.E2Node]:
+    async def list_nodes(self, oid: Optional[str] = None) -> List[aiomsa.abc.E2Node]:
         nodes = []
 
         admin_client = E2TAdminServiceStub(self._e2t_channel)
@@ -82,10 +82,10 @@ class E2Client(e2.E2Client):
                 continue
             if oid is None or any(func.oid == oid for func in conn.ran_functions):
                 nodes.append(
-                    models.E2Node(
+                    aiomsa.abc.E2Node(
                         id=conn.id,
                         ran_functions=[
-                            models.RanFunction(
+                            aiomsa.abc.RanFunction(
                                 id=func.ran_function_id,
                                 oid=func.oid,
                                 definition=func.description,
@@ -104,7 +104,7 @@ class E2Client(e2.E2Client):
         service_model_version: str,
         header: bytes,
         message: bytes,
-        control_ack_request: models.RICControlAckRequest,
+        control_ack_request: aiomsa.abc.RICControlAckRequest,
     ) -> Optional[bytes]:
         client = ControlServiceStub(self._e2t_channel)
         headers = RequestHeaders(
@@ -129,7 +129,7 @@ class E2Client(e2.E2Client):
         service_model_name: str,
         service_model_version: str,
         trigger: bytes,
-        actions: List[models.RICAction],
+        actions: List[aiomsa.abc.RICAction],
     ) -> Subscription:
         client = SubscriptionServiceStub(self._e2t_channel)
         headers = RequestHeaders(
