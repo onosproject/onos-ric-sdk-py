@@ -22,10 +22,30 @@ from onos_api.e2t.e2.v1beta1 import (
     ServiceModel,
     SubsequentAction,
     SubsequentActionType,
-    Subscription,
+    SubscribeResponse,
+    Subscription as E2Subscription,
     SubscriptionServiceStub,
     TimeToWait,
 )
+
+
+class Subscription(e2.Subscription):
+    def __init__(self, id: str, stream: AsyncIterator[SubscribeResponse]) -> None:
+        self._id = id
+        self._stream = stream
+
+    @property
+    def id(self) -> str:
+        return self._id
+
+    def __aiter__(self) -> "Subscription":
+        return self
+
+    async def __anext__(self) -> Optional[Tuple[bytes, bytes]]:
+        async for response in self._stream:
+            return response.indication.header, response.indication.payload
+        else:
+            return None
 
 
 class E2Client(e2.E2Client):
@@ -103,14 +123,14 @@ class E2Client(e2.E2Client):
         )
         return outcome.payload
 
-    async def subscribe(  # type: ignore
+    async def subscribe(
         self,
         e2_node_id: str,
         service_model_name: str,
         service_model_version: str,
         trigger: bytes,
         actions: List[models.RICAction],
-    ) -> AsyncIterator[Tuple[bytes, bytes]]:
+    ) -> Subscription:
         client = SubscriptionServiceStub(self._e2t_channel)
         headers = RequestHeaders(
             app_id=self._app_id,
@@ -121,7 +141,7 @@ class E2Client(e2.E2Client):
             ),
             encoding=Encoding.PROTO,
         )
-        subscription = Subscription(
+        subscription = E2Subscription(
             id=str(uuid4()),
             event_trigger=EventTrigger(payload=trigger),
         )
@@ -136,10 +156,8 @@ class E2Client(e2.E2Client):
                 )
             subscription.actions.append(action)
 
-        async for response in client.subscribe(
-            headers=headers, subscription=subscription
-        ):
-            yield response.indication.header, response.indication.payload
+        stream = client.subscribe(headers=headers, subscription=subscription)
+        return Subscription(subscription.id, stream)
 
     async def unsubscribe(self, subscription_id: str) -> None:
         raise NotImplementedError()
