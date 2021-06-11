@@ -159,8 +159,8 @@ class E2Client(e2.E2Client):
         stream = client.subscribe(headers=headers, subscription=subscription)
         return Subscription(subscription.id, stream)
 
-    async def unsubscribe(self, subscription_id: str) -> None:
-        raise NotImplementedError()
+    async def unsubscribe(self, e2_node_id: str, subscription_id: str) -> None:
+        client = SubscriptionServiceStub(self._e2t_channel)
 
     async def __aenter__(self) -> "E2Client":
         return self
