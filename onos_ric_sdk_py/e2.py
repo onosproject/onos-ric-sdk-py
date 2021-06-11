@@ -45,7 +45,7 @@ class Subscription(e2.Subscription):
         async for response in self._stream:
             return response.indication.header, response.indication.payload
         else:
-            return None
+            raise StopAsyncIteration
 
 
 class E2Client(e2.E2Client):
