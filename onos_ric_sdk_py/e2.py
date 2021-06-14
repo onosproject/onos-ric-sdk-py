@@ -11,7 +11,7 @@ from uuid import uuid4
 import aiomsa.abc
 from grpclib.client import Channel
 from onos_api.e2t.admin import E2TAdminServiceStub
-from onos_api.e2t.aiomsa.abc.v1beta1 import (
+from onos_api.e2t.e2.v1beta1 import (
     Action,
     ActionType,
     ControlMessage,
