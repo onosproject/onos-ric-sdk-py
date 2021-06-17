@@ -5,8 +5,6 @@ from __future__ import absolute_import
 
 import os
 import ssl
-import os
-import ssl
 from typing import AsyncIterator, List, Optional, Tuple
 from uuid import uuid4
 
