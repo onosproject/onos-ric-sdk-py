@@ -76,8 +76,8 @@ class E2Client(aiomsa.abc.E2Client):
     async def list_nodes(self, oid: Optional[str] = None) -> List[aiomsa.abc.E2Node]:
         nodes = []
 
-        admin_client = E2TAdminServiceStub(self._e2t_channel)
-        async for conn in admin_client.list_e2_node_connections():
+        client = E2TAdminServiceStub(self._e2t_channel)
+        async for conn in client.list_e2_node_connections():
             if not conn.ran_functions:
                 continue
             if oid is None or any(func.oid == oid for func in conn.ran_functions):
