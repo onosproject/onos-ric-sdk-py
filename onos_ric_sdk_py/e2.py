@@ -6,11 +6,9 @@ from __future__ import absolute_import
 import os
 import ssl
 from typing import AsyncIterator, List, Optional, Tuple
-from uuid import uuid4
 
-from aiomsa import e2, models
+import aiomsa.abc
 from grpclib.client import Channel
-from onos_api.e2t.admin import E2TAdminServiceStub
 from onos_api.e2t.e2.v1beta1 import (
     Action,
     ActionType,
@@ -23,13 +21,13 @@ from onos_api.e2t.e2.v1beta1 import (
     SubsequentAction,
     SubsequentActionType,
     SubscribeResponse,
-    Subscription as E2Subscription,
     SubscriptionServiceStub,
+    SubscriptionSpec,
     TimeToWait,
 )
 
 
-class Subscription(e2.Subscription):
+class Subscription(aiomsa.abc.Subscription):
     def __init__(self, id: str, stream: AsyncIterator[SubscribeResponse]) -> None:
         self._id = id
         self._stream = stream
@@ -48,7 +46,7 @@ class Subscription(e2.Subscription):
             raise StopAsyncIteration
 
 
-class E2Client(e2.E2Client):
+class E2Client(aiomsa.abc.E2Client):
     INSTANCE_ID = os.getenv("HOSTNAME", "")
 
     def __init__(
@@ -73,30 +71,6 @@ class E2Client(e2.E2Client):
         e2t_ip, e2t_port = e2t_endpoint.rsplit(":", 1)
         self._e2t_channel = Channel(e2t_ip, int(e2t_port), ssl=ssl_context)
 
-    async def list_nodes(self, oid: Optional[str] = None) -> List[models.E2Node]:
-        nodes = []
-
-        admin_client = E2TAdminServiceStub(self._e2t_channel)
-        async for conn in admin_client.list_e2_node_connections():
-            if not conn.ran_functions:
-                continue
-            if oid is None or any(func.oid == oid for func in conn.ran_functions):
-                nodes.append(
-                    models.E2Node(
-                        id=conn.id,
-                        ran_functions=[
-                            models.RanFunction(
-                                id=func.ran_function_id,
-                                oid=func.oid,
-                                definition=func.description,
-                            )
-                            for func in conn.ran_functions
-                        ],
-                    )
-                )
-
-        return nodes
-
     async def control(
         self,
         e2_node_id: str,
@@ -104,45 +78,45 @@ class E2Client(e2.E2Client):
         service_model_version: str,
         header: bytes,
         message: bytes,
-        control_ack_request: models.RICControlAckRequest,
+        control_ack_request: aiomsa.abc.RICControlAckRequest,
     ) -> Optional[bytes]:
         client = ControlServiceStub(self._e2t_channel)
         headers = RequestHeaders(
             app_id=self._app_id,
-            instance_id=self.INSTANCE_ID,
-            node_id=e2_node_id,
+            app_instance_id=self.INSTANCE_ID,
+            e2_node_id=e2_node_id,
             service_model=ServiceModel(
                 name=service_model_name, version=service_model_version
             ),
             encoding=Encoding.PROTO,
         )
 
-        outcome = await client.control(
+        response = await client.control(
             headers=headers,
             message=ControlMessage(header=header, payload=message),
         )
-        return outcome.payload
+        return response.outcome.payload
 
     async def subscribe(
         self,
         e2_node_id: str,
         service_model_name: str,
         service_model_version: str,
+        subscription_id: str,
         trigger: bytes,
-        actions: List[models.RICAction],
+        actions: List[aiomsa.abc.RICAction],
     ) -> Subscription:
         client = SubscriptionServiceStub(self._e2t_channel)
         headers = RequestHeaders(
             app_id=self._app_id,
-            instance_id=self.INSTANCE_ID,
-            node_id=e2_node_id,
+            app_instance_id=self.INSTANCE_ID,
+            e2_node_id=e2_node_id,
             service_model=ServiceModel(
                 name=service_model_name, version=service_model_version
             ),
             encoding=Encoding.PROTO,
         )
-        subscription = E2Subscription(
-            id=str(uuid4()),
+        subscription = SubscriptionSpec(
             event_trigger=EventTrigger(payload=trigger),
         )
         for a in actions:
@@ -156,10 +130,12 @@ class E2Client(e2.E2Client):
                 )
             subscription.actions.append(action)
 
-        stream = client.subscribe(headers=headers, subscription=subscription)
-        return Subscription(subscription.id, stream)
+        stream = client.subscribe(
+            headers=headers, transaction_id=subscription_id, subscription=subscription
+        )
+        return Subscription(subscription_id, stream)
 
-    async def unsubscribe(  # type: ignore
+    async def unsubscribe(
         self,
         e2_node_id: str,
         service_model_name: str,
@@ -169,15 +145,15 @@ class E2Client(e2.E2Client):
         client = SubscriptionServiceStub(self._e2t_channel)
         headers = RequestHeaders(
             app_id=self._app_id,
-            instance_id=self.INSTANCE_ID,
-            node_id=e2_node_id,
+            app_instance_id=self.INSTANCE_ID,
+            e2_node_id=e2_node_id,
             service_model=ServiceModel(
                 name=service_model_name, version=service_model_version
             ),
             encoding=Encoding.PROTO,
         )
 
-        await client.unsubscribe(headers=headers, subscription_id=subscription_id)
+        await client.unsubscribe(headers=headers, transaction_id=subscription_id)
 
     async def __aenter__(self) -> "E2Client":
         return self
