@@ -6,7 +6,6 @@ from __future__ import absolute_import
 import os
 import ssl
 from typing import AsyncIterator, List, Optional, Tuple
-from uuid import uuid4
 
 import aiomsa.abc
 from grpclib.client import Channel
@@ -23,7 +22,7 @@ from onos_api.e2t.e2.v1beta1 import (
     SubsequentAction,
     SubsequentActionType,
     SubscribeResponse,
-    Subscription as E2Subscription,
+    SubscriptionSpec,
     SubscriptionServiceStub,
     TimeToWait,
 )
@@ -109,40 +108,40 @@ class E2Client(aiomsa.abc.E2Client):
         client = ControlServiceStub(self._e2t_channel)
         headers = RequestHeaders(
             app_id=self._app_id,
-            instance_id=self.INSTANCE_ID,
-            node_id=e2_node_id,
+            app_instance_id=self.INSTANCE_ID,
+            e2_node_id=e2_node_id,
             service_model=ServiceModel(
                 name=service_model_name, version=service_model_version
             ),
             encoding=Encoding.PROTO,
         )
 
-        outcome = await client.control(
+        response = await client.control(
             headers=headers,
             message=ControlMessage(header=header, payload=message),
         )
-        return outcome.payload
+        return response.outcome.payload
 
     async def subscribe(
         self,
         e2_node_id: str,
         service_model_name: str,
         service_model_version: str,
+        subscription_id: str,
         trigger: bytes,
         actions: List[aiomsa.abc.RICAction],
     ) -> Subscription:
         client = SubscriptionServiceStub(self._e2t_channel)
         headers = RequestHeaders(
             app_id=self._app_id,
-            instance_id=self.INSTANCE_ID,
-            node_id=e2_node_id,
+            app_instance_id=self.INSTANCE_ID,
+            e2_node_id=e2_node_id,
             service_model=ServiceModel(
                 name=service_model_name, version=service_model_version
             ),
             encoding=Encoding.PROTO,
         )
-        subscription = E2Subscription(
-            id=str(uuid4()),
+        subscription = SubscriptionSpec(
             event_trigger=EventTrigger(payload=trigger),
         )
         for a in actions:
@@ -156,8 +155,10 @@ class E2Client(aiomsa.abc.E2Client):
                 )
             subscription.actions.append(action)
 
-        stream = client.subscribe(headers=headers, subscription=subscription)
-        return Subscription(subscription.id, stream)
+        stream = client.subscribe(
+            headers=headers, transaction_id=subscription_id, subscription=subscription
+        )
+        return Subscription(subscription_id, stream)
 
     async def unsubscribe(  # type: ignore
         self,
@@ -169,15 +170,15 @@ class E2Client(aiomsa.abc.E2Client):
         client = SubscriptionServiceStub(self._e2t_channel)
         headers = RequestHeaders(
             app_id=self._app_id,
-            instance_id=self.INSTANCE_ID,
-            node_id=e2_node_id,
+            app_instance_id=self.INSTANCE_ID,
+            e2_node_id=e2_node_id,
             service_model=ServiceModel(
                 name=service_model_name, version=service_model_version
             ),
             encoding=Encoding.PROTO,
         )
 
-        await client.unsubscribe(headers=headers, subscription_id=subscription_id)
+        await client.unsubscribe(headers=headers, transaction_id=subscription_id)
 
     async def __aenter__(self) -> "E2Client":
         return self
