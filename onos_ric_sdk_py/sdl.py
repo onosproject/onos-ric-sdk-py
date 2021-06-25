@@ -30,6 +30,7 @@ class SDLClient(aiomsa.abc.SDLClient):
         cert_path: Optional[str] = None,
         key_path: Optional[str] = None,
         skip_verify: bool = True,
+        **kwargs: str,
     ) -> None:
         ssl_context = None
         if ca_path is not None and cert_path is not None and key_path is not None:
