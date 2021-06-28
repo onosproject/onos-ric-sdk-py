@@ -57,6 +57,7 @@ class E2Client(aiomsa.abc.E2Client):
         cert_path: Optional[str] = None,
         key_path: Optional[str] = None,
         skip_verify: bool = True,
+        **kwargs: str,
     ) -> None:
         self._app_id = app_id
 
