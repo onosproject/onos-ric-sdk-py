@@ -8,6 +8,8 @@ import ssl
 from typing import AsyncIterator, List, Optional, Tuple
 
 import aiomsa.abc
+from aiomsa.exceptions import ClientRuntimeError, ClientStoppedError
+from grpclib import GRPCError
 from grpclib.client import Channel
 from onos_api.e2t.e2.v1beta1 import (
     Action,
@@ -71,6 +73,7 @@ class E2Client(aiomsa.abc.E2Client):
 
         e2t_ip, e2t_port = e2t_endpoint.rsplit(":", 1)
         self._e2t_channel = Channel(e2t_ip, int(e2t_port), ssl=ssl_context)
+        self._ready = True
 
     async def control(
         self,
@@ -81,6 +84,9 @@ class E2Client(aiomsa.abc.E2Client):
         message: bytes,
         control_ack_request: aiomsa.abc.RICControlAckRequest,
     ) -> Optional[bytes]:
+        if not self._ready:
+            raise ClientStoppedError()
+
         client = ControlServiceStub(self._e2t_channel)
         headers = RequestHeaders(
             app_id=self._app_id,
@@ -92,11 +98,14 @@ class E2Client(aiomsa.abc.E2Client):
             encoding=Encoding.PROTO,
         )
 
-        response = await client.control(
-            headers=headers,
-            message=ControlMessage(header=header, payload=message),
-        )
-        return response.outcome.payload
+        try:
+            response = await client.control(
+                headers=headers,
+                message=ControlMessage(header=header, payload=message),
+            )
+            return response.outcome.payload
+        except GRPCError as e:
+            raise ClientRuntimeError() from e
 
     async def subscribe(
         self,
@@ -107,6 +116,9 @@ class E2Client(aiomsa.abc.E2Client):
         trigger: bytes,
         actions: List[aiomsa.abc.RICAction],
     ) -> Subscription:
+        if not self._ready:
+            raise ClientStoppedError()
+
         client = SubscriptionServiceStub(self._e2t_channel)
         headers = RequestHeaders(
             app_id=self._app_id,
@@ -143,6 +155,9 @@ class E2Client(aiomsa.abc.E2Client):
         service_model_version: str,
         subscription_id: str,
     ) -> None:
+        if not self._ready:
+            raise ClientStoppedError()
+
         client = SubscriptionServiceStub(self._e2t_channel)
         headers = RequestHeaders(
             app_id=self._app_id,
@@ -154,10 +169,14 @@ class E2Client(aiomsa.abc.E2Client):
             encoding=Encoding.PROTO,
         )
 
-        await client.unsubscribe(headers=headers, transaction_id=subscription_id)
+        try:
+            await client.unsubscribe(headers=headers, transaction_id=subscription_id)
+        except GRPCError as e:
+            raise ClientRuntimeError() from e
 
     async def __aenter__(self) -> "E2Client":
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         self._e2t_channel.close()
+        self._ready = False
