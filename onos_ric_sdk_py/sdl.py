@@ -75,7 +75,7 @@ class SDLClient(aiomsa.abc.SDLClient):
         except GRPCError as e:
             raise ClientRuntimeError() from e
 
-    async def _get_cell_entity_id(self, e2_node_id: str, cell_id: str) -> int:
+    async def _get_cell_entity_id(self, e2_node_id: str, cell_id: str) -> str:
         """
         given e2_node_id and cell_id, returns entity id
         raises ClientRuntimeError if cell_id is not found
