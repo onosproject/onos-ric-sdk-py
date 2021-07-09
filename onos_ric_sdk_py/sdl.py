@@ -75,10 +75,10 @@ class SDLClient(aiomsa.abc.SDLClient):
         except GRPCError as e:
             raise ClientRuntimeError() from e
 
-    async def _get_cell_entity_id(self, e2_node_id: str, cell_id: str) -> str:
+    async def _get_cell_entity_id(self, e2_node_id: str, cell_id: str) -> Optional[str]:
         """
         given e2_node_id and cell_id, returns entity id
-        raises ClientRuntimeError if cell_id is not found
+        returns None if cell_id is not found
         """
         if not self._ready:
             raise ClientStoppedError()
@@ -105,21 +105,22 @@ class SDLClient(aiomsa.abc.SDLClient):
         except GRPCError as e:
             raise ClientRuntimeError() from e
 
-        raise ClientRuntimeError(
-            f"cannot find cell_id:{cell_id} in e2_node:{e2_node_id}"
-        )
+        return None
 
     async def get_cell_data(
         self, e2_node_id: str, cell_id: str, key: str
     ) -> Optional[bytes]:
         """
-        get data referenced by key attached to a cell_id
+        get data referenced by key attached to a cell_id, if available
+        otherwise returns None
         """
 
         if not self._ready:
             raise ClientStoppedError()
 
         entity_id = await self._get_cell_entity_id(e2_node_id, cell_id)
+        if entity_id is None:
+            return None
 
         client = TopoStub(self._topo_channel)
         try:
@@ -139,12 +140,18 @@ class SDLClient(aiomsa.abc.SDLClient):
         """
         set data referenced by key attached to a cell_id
         remove data referenced by key if data is None
+
+        raises ClientRuntimeError if data cannot be saved
         """
 
         if not self._ready:
             raise ClientStoppedError()
 
         entity_id = await self._get_cell_entity_id(e2_node_id, cell_id)
+        if entity_id is None:
+            raise ClientRuntimeError(
+                f"cannot find cell_id:{cell_id} in e2_node:{e2_node_id}"
+            )
 
         client = TopoStub(self._topo_channel)
         try:
