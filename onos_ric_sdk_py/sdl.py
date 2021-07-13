@@ -8,6 +8,7 @@ import ssl
 from typing import AsyncIterator, List, Optional
 
 import aiomsa.abc
+import betterproto
 from aiomsa.exceptions import ClientRuntimeError, ClientStoppedError
 from grpclib import GRPCError
 from grpclib.client import Channel
@@ -71,6 +72,103 @@ class SDLClient(aiomsa.abc.SDLClient):
                 cell_ids.append(e2_cell.cell_object_id)
 
             return cell_ids
+        except GRPCError as e:
+            raise ClientRuntimeError() from e
+
+    async def _get_cell_entity_id(self, e2_node_id: str, cell_id: str) -> Optional[str]:
+        """
+        given e2_node_id and cell_id, returns entity id
+        returns None if cell_id is not found
+        """
+        if not self._ready:
+            raise ClientStoppedError()
+
+        client = TopoStub(self._topo_channel)
+        filters = Filters(
+            relation_filter=RelationFilter(
+                src_id=e2_node_id,
+                relation_kind=RanRelationKinds.CONTAINS.name.lower(),
+                target_kind="",
+            )
+        )
+
+        try:
+            response = await client.list(filters=filters)
+            for obj in response.objects:
+                if obj.entity.kind_id != RanEntityKinds.E2CELL.name.lower():
+                    continue
+
+                aspects = obj.aspects["onos.topo.E2Cell"].value
+                e2_cell = E2Cell().from_json(aspects)
+                if e2_cell.cell_object_id == cell_id:
+                    return obj.id
+        except GRPCError as e:
+            raise ClientRuntimeError() from e
+
+        return None
+
+    async def get_cell_data(
+        self, e2_node_id: str, cell_id: str, key: str
+    ) -> Optional[bytes]:
+        """
+        get data referenced by key attached to a cell_id, if available
+        otherwise returns None
+        """
+
+        if not self._ready:
+            raise ClientStoppedError()
+
+        entity_id = await self._get_cell_entity_id(e2_node_id, cell_id)
+        if entity_id is None:
+            return None
+
+        client = TopoStub(self._topo_channel)
+        try:
+            resp = await client.get(id=entity_id)
+        except GRPCError as e:
+            raise ClientRuntimeError() from e
+
+        type_data = resp.object.aspects.get(key)
+        if type_data is None:
+            return None
+
+        return type_data.value
+
+    async def set_cell_data(
+        self, e2_node_id: str, cell_id: str, key: str, data: bytes
+    ) -> None:
+        """
+        set data referenced by key attached to a cell_id
+        remove data referenced by key if data is None
+
+        raises ClientRuntimeError if data cannot be saved
+        """
+
+        if not self._ready:
+            raise ClientStoppedError()
+
+        entity_id = await self._get_cell_entity_id(e2_node_id, cell_id)
+        if entity_id is None:
+            raise ClientRuntimeError(
+                f"cannot find cell_id:{cell_id} in e2_node:{e2_node_id}"
+            )
+
+        client = TopoStub(self._topo_channel)
+        try:
+            resp = await client.get(id=entity_id)
+        except GRPCError as e:
+            raise ClientRuntimeError() from e
+
+        if data is None:
+            if key not in resp.object.aspects:
+                return
+            else:
+                del resp.object.aspects[key]
+        else:
+            resp.object.aspects[key] = betterproto.lib.google.protobuf.Any(key, data)
+
+        try:
+            await client.update(object=resp.object)
         except GRPCError as e:
             raise ClientRuntimeError() from e
 
