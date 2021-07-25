@@ -47,6 +47,40 @@ class SDLClient(aiomsa.abc.SDLClient):
         self._topo_channel = Channel(topo_ip, int(topo_port), ssl=ssl_context)
         self._ready = True
 
+    async def get_cells(self, e2_node_id: str) -> List[aiomsa.abc.E2Cell]:
+        if not self._ready:
+            raise ClientStoppedError()
+
+        client = TopoStub(self._topo_channel)
+        filters = Filters(
+            relation_filter=RelationFilter(
+                src_id=e2_node_id,
+                relation_kind=RanRelationKinds.CONTAINS.name.lower(),
+                target_kind="",
+            )
+        )
+
+        cells = []
+        try:
+            response = await client.list(filters=filters)
+            for obj in response.objects:
+                if obj.entity.kind_id != RanEntityKinds.E2CELL.name.lower():
+                    continue
+
+                aspects = obj.aspects["onos.topo.E2Cell"].value
+                e2_cell = E2Cell().from_json(aspects)
+                cells.append(
+                    aiomsa.abc.E2Cell(
+                        id=e2_cell.cell_global_id.value,
+                        oid=e2_cell.cell_object_id,
+                        pci=e2_cell.pci,
+                    )
+                )
+
+            return cells
+        except GRPCError as e:
+            raise ClientRuntimeError() from e
+
     async def get_cell_ids(self, e2_node_id: str) -> List[str]:
         if not self._ready:
             raise ClientStoppedError()
@@ -191,20 +225,54 @@ class SDLClient(aiomsa.abc.SDLClient):
                     get_response = await client.get(id=e2_node_id)
                     aspects = get_response.object.aspects["onos.topo.E2Node"].value
 
-                    ran_functions = []
+                    # Decode manually because betterproto can't decode 'Any' from JSON
                     e2_node = json.loads(aspects.decode())
-                    for service_model_info in e2_node["serviceModels"].values():
-                        ran_functions.append(
-                            aiomsa.abc.RanFunction(
-                                id=service_model_info.get("name", ""),
-                                oid=service_model_info["oid"],
-                                definition=service_model_info.get("ranFunctions", [{}])[
-                                    0
-                                ],
+
+                    service_models = []
+                    for oid, sm in e2_node["serviceModels"].items():
+                        ran_functions = []
+                        for idx, func in enumerate(sm.get("ranFunctions", [])):
+                            report_styles = []
+                            for style in func["reportStyles"]:
+                                measurements = style.get("measurements")
+                                if measurements is None:
+                                    report_styles.append(
+                                        aiomsa.abc.ReportStyle(
+                                            type=style["type"], name=style["name"]
+                                        )
+                                    )
+                                else:
+                                    report_styles.append(
+                                        aiomsa.abc.KpmReportStyle(
+                                            type=style["type"],
+                                            name=style["name"],
+                                            measurements=[
+                                                (
+                                                    int(m["id"].lstrip("value:")),
+                                                    m["name"],
+                                                )
+                                                for m in measurements
+                                            ],
+                                        )
+                                    )
+
+                            ran_functions.append(
+                                aiomsa.abc.RanFunction(
+                                    id=idx, report_styles=report_styles
+                                )
+                            )
+
+                        service_models.append(
+                            aiomsa.abc.ServiceModel(
+                                name=sm.get("name", ""),
+                                oid=oid,
+                                ran_functions=ran_functions,
                             )
                         )
 
-                    yield aiomsa.abc.E2Node(id=e2_node_id, ran_functions=ran_functions)
+                    yield aiomsa.abc.E2Node(
+                        id=e2_node_id, service_models=service_models
+                    )
         except GRPCError as e:
             raise ClientRuntimeError() from e
 
