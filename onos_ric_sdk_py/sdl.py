@@ -164,7 +164,7 @@ class SDLClient(aiomsa.abc.SDLClient):
         except GRPCError as e:
             raise ClientRuntimeError() from e
 
-        data = []
+        data: List[Optional[bytes]] = []
         for k in keys:
             type_data = resp.object.aspects.get(k)
             if type_data is None:
