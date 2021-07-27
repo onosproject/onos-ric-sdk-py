@@ -109,7 +109,9 @@ class SDLClient(aiomsa.abc.SDLClient):
         except GRPCError as e:
             raise ClientRuntimeError() from e
 
-    async def _get_cell_entity_id(self, e2_node_id: str, cell_global_id: str) -> Optional[str]:
+    async def _get_cell_entity_id(
+        self, e2_node_id: str, cell_global_id: str
+    ) -> Optional[str]:
         """
         given e2_node_id and cell_global_id, returns entity id
         returns None if cell_global_id is not found
@@ -206,7 +208,9 @@ class SDLClient(aiomsa.abc.SDLClient):
                     del resp.object.aspects[key]
                     op_count += 1
             else:
-                resp.object.aspects[key] = betterproto.lib.google.protobuf.Any(key, data)
+                resp.object.aspects[key] = betterproto.lib.google.protobuf.Any(
+                    key, data
+                )
                 op_count += 1
 
         if op_count == 0:
