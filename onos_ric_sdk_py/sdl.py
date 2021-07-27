@@ -5,7 +5,7 @@ from __future__ import absolute_import
 
 import json
 import ssl
-from typing import AsyncIterator, List, Optional
+from typing import AsyncIterator, Dict, List, Optional
 
 import aiomsa.abc
 import betterproto
@@ -109,10 +109,10 @@ class SDLClient(aiomsa.abc.SDLClient):
         except GRPCError as e:
             raise ClientRuntimeError() from e
 
-    async def _get_cell_entity_id(self, e2_node_id: str, cell_id: str) -> Optional[str]:
+    async def _get_cell_entity_id(self, e2_node_id: str, cell_global_id: str) -> Optional[str]:
         """
-        given e2_node_id and cell_id, returns entity id
-        returns None if cell_id is not found
+        given e2_node_id and cell_global_id, returns entity id
+        returns None if cell_global_id is not found
         """
         if not self._ready:
             raise ClientStoppedError()
@@ -134,7 +134,7 @@ class SDLClient(aiomsa.abc.SDLClient):
 
                 aspects = obj.aspects["onos.topo.E2Cell"].value
                 e2_cell = E2Cell().from_json(aspects)
-                if e2_cell.cell_object_id == cell_id:
+                if e2_cell.cell_global_id.value == cell_global_id:
                     return obj.id
         except GRPCError as e:
             raise ClientRuntimeError() from e
@@ -142,8 +142,8 @@ class SDLClient(aiomsa.abc.SDLClient):
         return None
 
     async def get_cell_data(
-        self, e2_node_id: str, cell_id: str, key: str
-    ) -> Optional[bytes]:
+        self, e2_node_id: str, cell_id: str, keys: List[str]
+    ) -> Optional[List[Optional[bytes]]]:
         """
         get data referenced by key attached to a cell_id, if available
         otherwise returns None
@@ -162,14 +162,18 @@ class SDLClient(aiomsa.abc.SDLClient):
         except GRPCError as e:
             raise ClientRuntimeError() from e
 
-        type_data = resp.object.aspects.get(key)
-        if type_data is None:
-            return None
+        data = []
+        for k in keys:
+            type_data = resp.object.aspects.get(k)
+            if type_data is None:
+                data.append(None)
+            else:
+                data.append(type_data.value)
 
-        return type_data.value
+        return data
 
     async def set_cell_data(
-        self, e2_node_id: str, cell_id: str, key: str, data: bytes
+        self, e2_node_id: str, cell_id: str, key_data_map: Dict[str, bytes]
     ) -> None:
         """
         set data referenced by key attached to a cell_id
@@ -193,13 +197,20 @@ class SDLClient(aiomsa.abc.SDLClient):
         except GRPCError as e:
             raise ClientRuntimeError() from e
 
-        if data is None:
-            if key not in resp.object.aspects:
-                return
+        op_count = 0
+        for key, data in key_data_map.items():
+            if data is None:
+                if key not in resp.object.aspects:
+                    pass
+                else:
+                    del resp.object.aspects[key]
+                    op_count += 1
             else:
-                del resp.object.aspects[key]
-        else:
-            resp.object.aspects[key] = betterproto.lib.google.protobuf.Any(key, data)
+                resp.object.aspects[key] = betterproto.lib.google.protobuf.Any(key, data)
+                op_count += 1
+
+        if op_count == 0:
+            return None
 
         try:
             await client.update(object=resp.object)
