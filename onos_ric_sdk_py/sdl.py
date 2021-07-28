@@ -214,7 +214,7 @@ class SDLClient(aiomsa.abc.SDLClient):
                 op_count += 1
 
         if op_count == 0:
-            return None
+            return
 
         try:
             await client.update(object=resp.object)
