@@ -5,50 +5,27 @@ from __future__ import absolute_import
 
 import os
 import ssl
-from typing import AsyncIterator, List, Optional, Tuple
+from types import TracebackType
+from typing import AsyncIterator, List, Optional, Tuple, Type
 
-import aiomsa.abc
-from aiomsa.exceptions import ClientRuntimeError, ClientStoppedError
 from grpclib import GRPCError
 from grpclib.client import Channel
 from onos_api.e2t.e2.v1beta1 import (
     Action,
-    ActionType,
     ControlMessage,
     ControlServiceStub,
     Encoding,
     EventTrigger,
     RequestHeaders,
     ServiceModel,
-    SubsequentAction,
-    SubsequentActionType,
-    SubscribeResponse,
     SubscriptionServiceStub,
     SubscriptionSpec,
-    TimeToWait,
 )
 
-
-class Subscription(aiomsa.abc.Subscription):
-    def __init__(self, id: str, stream: AsyncIterator[SubscribeResponse]) -> None:
-        self._id = id
-        self._stream = stream
-
-    @property
-    def id(self) -> str:
-        return self._id
-
-    def __aiter__(self) -> "Subscription":
-        return self
-
-    async def __anext__(self) -> Tuple[bytes, bytes]:
-        async for response in self._stream:
-            return response.indication.header, response.indication.payload
-        else:
-            raise StopAsyncIteration
+from .exceptions import ClientRuntimeError, ClientStoppedError
 
 
-class E2Client(aiomsa.abc.E2Client):
+class E2Client:
     INSTANCE_ID = os.getenv("HOSTNAME", "")
 
     def __init__(
@@ -59,7 +36,6 @@ class E2Client(aiomsa.abc.E2Client):
         cert_path: Optional[str] = None,
         key_path: Optional[str] = None,
         skip_verify: bool = True,
-        **kwargs: str,
     ) -> None:
         self._app_id = app_id
 
@@ -82,8 +58,23 @@ class E2Client(aiomsa.abc.E2Client):
         service_model_version: str,
         header: bytes,
         message: bytes,
-        control_ack_request: aiomsa.abc.RICControlAckRequest,
-    ) -> Optional[bytes]:
+    ) -> bytes:
+        """Send a control message to the RIC to initiate or resume some functionality.
+
+        Args:
+            e2_node_id: The target E2 node ID.
+            service_model_name: The service model name.
+            service_model_version: The service model version.
+            header: The RIC control header.
+            message: The RIC control message.
+
+        Returns:
+            The control outcome.
+
+        Raises:
+            ClientStoppedError: The underlying client resources have not been started.
+            ClientRuntimeError: There was an error performing the request.
+        """
         if not self._ready:
             raise ClientStoppedError()
 
@@ -114,8 +105,25 @@ class E2Client(aiomsa.abc.E2Client):
         service_model_version: str,
         subscription_id: str,
         trigger: bytes,
-        actions: List[aiomsa.abc.RICAction],
-    ) -> Subscription:
+        actions: List[Action],
+    ) -> AsyncIterator[Tuple[bytes, bytes]]:
+        """Establish an E2 subscription.
+
+        Args:
+            e2_node_id: The target E2 node ID.
+            service_model_name: The service model name.
+            service_model_version: The service model version.
+            subscription_id: The ID to use for the subscription.
+            trigger: The event trigger.
+            actions: A sequence of RIC service actions.
+
+        Yields:
+            The next indication header and message, if available.
+
+        Raises:
+            ClientStoppedError: The underlying client resources have not been started.
+            ClientRuntimeError: There was an error performing the request.
+        """
         if not self._ready:
             raise ClientStoppedError()
 
@@ -130,23 +138,15 @@ class E2Client(aiomsa.abc.E2Client):
             encoding=Encoding.PROTO,
         )
         subscription = SubscriptionSpec(
+            actions=actions,
             event_trigger=EventTrigger(payload=trigger),
         )
-        for a in actions:
-            action = Action(id=a.id, type=ActionType(a.type))
-            if a.definition is not None:
-                action.payload = a.definition
-            if a.subsequent_action is not None:
-                action.subsequent_action = SubsequentAction(
-                    type=SubsequentActionType(a.subsequent_action.type),
-                    time_to_wait=TimeToWait(a.subsequent_action.time_to_wait),
-                )
-            subscription.actions.append(action)
 
         stream = client.subscribe(
             headers=headers, transaction_id=subscription_id, subscription=subscription
         )
-        return Subscription(subscription_id, stream)
+        async for response in stream:
+            yield response.indication.header, response.indication.payload
 
     async def unsubscribe(
         self,
@@ -155,6 +155,18 @@ class E2Client(aiomsa.abc.E2Client):
         service_model_version: str,
         subscription_id: str,
     ) -> None:
+        """Delete an E2 subscription.
+
+        Args:
+            e2_node_id: The target E2 node ID.
+            service_model_name: The service model name.
+            service_model_version: The service model version.
+            subscription_id: The ID of the subscription to delete.
+
+        Raises:
+            ClientStoppedError: The underlying client resources have not been started.
+            ClientRuntimeError: There was an error performing the request.
+        """
         if not self._ready:
             raise ClientStoppedError()
 
@@ -175,8 +187,15 @@ class E2Client(aiomsa.abc.E2Client):
             raise ClientRuntimeError() from e
 
     async def __aenter__(self) -> "E2Client":
+        """Create any underlying resources required for the client to run."""
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+    async def __aexit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
+        """Cleanly stop all underlying resources used by the client."""
         self._e2t_channel.close()
         self._ready = False

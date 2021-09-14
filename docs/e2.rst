@@ -1,0 +1,18 @@
+..
+   SPDX-FileCopyrightText: © 2021 Open Networking Foundation <support@opennetworking.org>
+   SPDX-License-Identifier: Apache-2.0
+
+.. _onos_ric_sdk_py-e2:
+
+==
+E2
+==
+
+.. currentmodule:: onos_ric_sdk_py.e2
+
+All communication with the E2T is done through the :class:`~.E2Client`. Its methods are
+asynchronous.
+
+.. autoclass:: E2Client
+   :members:
+   :special-members: __aenter__, __aexit__

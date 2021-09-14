@@ -6,4 +6,4 @@ Python Application SDK for ONOS RIC (µONOS Architecture)
 
 Run lint/licensing/static checks: `make lint`
 
-Run unit tests (via `tox`): `make test`
+Run unit tests (via `pytest`): `make test`
