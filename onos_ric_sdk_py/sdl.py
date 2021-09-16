@@ -5,27 +5,33 @@ from __future__ import absolute_import
 
 import json
 import ssl
-from typing import AsyncIterator, Dict, List, Optional
+from types import TracebackType
+from typing import Any, AsyncIterator, Dict, List, Optional, Tuple, Type
 
-import aiomsa.abc
 import betterproto
-from aiomsa.exceptions import ClientRuntimeError, ClientStoppedError
 from grpclib import GRPCError
 from grpclib.client import Channel
 from onos_api.topo import (
     E2Cell,
+    E2Node,
     EqualFilter,
     EventType,
     Filter,
     Filters,
+    KpmRanFunction,
+    MhoRanFunction,
     RanEntityKinds,
     RanRelationKinds,
+    RcRanFunction,
     RelationFilter,
+    RsmRanFunction,
     TopoStub,
 )
 
+from .exceptions import ClientRuntimeError, ClientStoppedError
 
-class SDLClient(aiomsa.abc.SDLClient):
+
+class SDLClient:
     def __init__(
         self,
         topo_endpoint: str,
@@ -33,7 +39,6 @@ class SDLClient(aiomsa.abc.SDLClient):
         cert_path: Optional[str] = None,
         key_path: Optional[str] = None,
         skip_verify: bool = True,
-        **kwargs: str,
     ) -> None:
         ssl_context = None
         if ca_path is not None and cert_path is not None and key_path is not None:
@@ -47,7 +52,19 @@ class SDLClient(aiomsa.abc.SDLClient):
         self._topo_channel = Channel(topo_ip, int(topo_port), ssl=ssl_context)
         self._ready = True
 
-    async def get_cells(self, e2_node_id: str) -> List[aiomsa.abc.E2Cell]:
+    async def get_cells(self, e2_node_id: str) -> List[E2Cell]:
+        """Get the cells corresponding to the given E2 node ID.
+
+        Args:
+            e2_node_id: The target E2 node ID.
+
+        Returns:
+            A list of cells that belong to ``e2_node_id``.
+
+        Raises:
+            ClientStoppedError: The underlying client resources have not been started.
+            ClientRuntimeError: There was an error performing the request.
+        """
         if not self._ready:
             raise ClientStoppedError()
 
@@ -69,43 +86,8 @@ class SDLClient(aiomsa.abc.SDLClient):
 
                 aspects = obj.aspects["onos.topo.E2Cell"].value
                 e2_cell = E2Cell().from_json(aspects)
-                cells.append(
-                    aiomsa.abc.E2Cell(
-                        id=e2_cell.cell_global_id.value,
-                        oid=e2_cell.cell_object_id,
-                        pci=e2_cell.pci,
-                    )
-                )
-
+                cells.append(e2_cell)
             return cells
-        except GRPCError as e:
-            raise ClientRuntimeError() from e
-
-    async def get_cell_ids(self, e2_node_id: str) -> List[str]:
-        if not self._ready:
-            raise ClientStoppedError()
-
-        client = TopoStub(self._topo_channel)
-        filters = Filters(
-            relation_filter=RelationFilter(
-                src_id=e2_node_id,
-                relation_kind=RanRelationKinds.CONTAINS.name.lower(),
-                target_kind="",
-            )
-        )
-
-        cell_ids = []
-        try:
-            response = await client.list(filters=filters)
-            for obj in response.objects:
-                if obj.entity.kind_id != RanEntityKinds.E2CELL.name.lower():
-                    continue
-
-                aspects = obj.aspects["onos.topo.E2Cell"].value
-                e2_cell = E2Cell().from_json(aspects)
-                cell_ids.append(e2_cell.cell_object_id)
-
-            return cell_ids
         except GRPCError as e:
             raise ClientRuntimeError() from e
 
@@ -221,7 +203,16 @@ class SDLClient(aiomsa.abc.SDLClient):
         except GRPCError as e:
             raise ClientRuntimeError() from e
 
-    async def watch_e2_connections(self) -> AsyncIterator[aiomsa.abc.E2Node]:
+    async def watch_e2_connections(self) -> AsyncIterator[Tuple[str, E2Node]]:
+        """Stream for newly available E2 node connections.
+
+        Yields:
+            An available E2 node and its ID.
+
+        Raises:
+            ClientStoppedError: The underlying client resources have not been started.
+            ClientRuntimeError: There was an error performing the request.
+        """
         if not self._ready:
             raise ClientStoppedError()
 
@@ -240,60 +231,43 @@ class SDLClient(aiomsa.abc.SDLClient):
                     get_response = await client.get(id=e2_node_id)
                     aspects = get_response.object.aspects["onos.topo.E2Node"].value
 
-                    # Decode manually because betterproto can't decode 'Any' from JSON
-                    e2_node = json.loads(aspects.decode())
+                    # Also decode manually because betterproto can't parse 'Any' from JSON
+                    e2_node = E2Node().from_json(aspects)
+                    e2_node_json = json.loads(aspects.decode())
 
-                    service_models = []
-                    for oid, sm in e2_node["serviceModels"].items():
+                    for oid, sm in e2_node_json["serviceModels"].items():
                         ran_functions = []
-                        for idx, func in enumerate(sm.get("ranFunctions", [])):
-                            report_styles = []
-                            for style in func["reportStyles"]:
-                                measurements = style.get("measurements")
-                                if measurements is None:
-                                    report_styles.append(
-                                        aiomsa.abc.ReportStyle(
-                                            type=style["type"], name=style["name"]
-                                        )
-                                    )
-                                else:
-                                    report_styles.append(
-                                        aiomsa.abc.KpmReportStyle(
-                                            type=style["type"],
-                                            name=style["name"],
-                                            measurements=[
-                                                (
-                                                    int(m["id"].lstrip("value:")),
-                                                    m["name"],
-                                                )
-                                                for m in measurements
-                                            ],
-                                        )
-                                    )
+                        for func_dict in sm.get("ranFunctions", []):
+                            type_url = func_dict.pop("@type")
+                            if type_url.endswith("KPMRanFunction"):
+                                func: Any = KpmRanFunction().from_dict(func_dict)
+                            elif type_url.endswith("MHORanFunction"):
+                                func = MhoRanFunction().from_dict(func_dict)
+                            elif type_url.endswith("RCRanFunction"):
+                                func = RcRanFunction().from_dict(func_dict)
+                            elif type_url.endswith("RSMRanFunction"):
+                                func = RsmRanFunction().from_dict(func_dict)
+                            else:
+                                raise ValueError(f"Unknown RAN function: {type_url}")
 
-                            ran_functions.append(
-                                aiomsa.abc.RanFunction(
-                                    id=idx, report_styles=report_styles
-                                )
-                            )
+                            ran_functions.append(func)
 
-                        service_models.append(
-                            aiomsa.abc.ServiceModel(
-                                name=sm.get("name", ""),
-                                oid=oid,
-                                ran_functions=ran_functions,
-                            )
-                        )
+                        e2_node.service_models[oid].ran_functions = ran_functions
 
-                    yield aiomsa.abc.E2Node(
-                        id=e2_node_id, service_models=service_models
-                    )
+                    yield e2_node_id, e2_node
         except GRPCError as e:
             raise ClientRuntimeError() from e
 
     async def __aenter__(self) -> "SDLClient":
+        """Create any underlying resources required for the client to run."""
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+    async def __aexit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
+        """Cleanly stop all underlying resources used by the client."""
         self._topo_channel.close()
         self._ready = False

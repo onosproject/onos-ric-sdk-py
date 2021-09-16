@@ -21,7 +21,7 @@ $(VENV_NAME): requirements.txt
 	$(VIRTUALENV) $@ ;\
   source ./$@/bin/activate ; set -u ;\
   python -m pip install --upgrade pip;\
-  python -m pip install -r requirements.txt tox black pylint flake8 mypy reuse
+  python -m pip install -r requirements.txt black flake8 furo isort mypy pylint pytest pytest-aiohttp pytest-asyncio pytest-cov reuse sphinx sphinx-autodoc-typehints sphinxcontrib-openapi
 	echo "To enter virtualenv, run 'source $@/bin/activate'"
 
 dist: setup.py $(VENV_NAME) ## Create a source distribution
@@ -29,41 +29,50 @@ dist: setup.py $(VENV_NAME) ## Create a source distribution
 	source ./$(VENV_NAME)/bin/activate ; set -u ;\
 	python ./$< sdist
 
-lint: license black pylint flake8 mypy ## run static lint checks
-
-test: $(VENV_NAME) ## run unit tests with tox
+docs: $(VENV_NAME) ## build docs with sphinx
 	source ./$</bin/activate ; set -u ;\
-	tox
+	make -C docs html
 
-license: $(VENV_NAME) ## Check license with the reuse tool
+lint: license black flake8 isort pylint mypy ## run static lint checks
+
+test: $(VENV_NAME) ## run unit tests with pytest
 	source ./$</bin/activate ; set -u ;\
-  reuse --version ;\
-  reuse --root . lint
+	pytest --cov=onos_ric_sdk_py --junit-xml=junit-results.xml --cov-report=xml tests/
+
+license: $(VENV_NAME) ## check license with the reuse tool
+	source ./$</bin/activate ; set -u ;\
+  	reuse --version ;\
+  	reuse --root . lint
 
 flake8: $(VENV_NAME) ## check python formatting with flake8
 	source ./$</bin/activate ; set -u ;\
-  flake8 --version ;\
-  flake8 --max-line-length 119 $(PYTHON_FILES)
+  	flake8 --version ;\
+  	flake8 --max-line-length 119 $(PYTHON_FILES)
 
 pylint: $(VENV_NAME) ## pylint check for python 3 compliance
 	source ./$</bin/activate ; set -u ;\
-  pylint --version ;\
-  pylint --py3k $(PYTHON_FILES)
+  	pylint --version ;\
+  	pylint --py3k $(PYTHON_FILES)
 
 mypy: $(VENV_NAME) ## run mypy to typecheck
 	source ./$</bin/activate ; set -u ;\
-  mypy --version ;\
-  mypy -p onos_ric_sdk_py
+  	mypy --version ;\
+  	mypy -p onos_ric_sdk_py
+
+isort: $(VENV_NAME) ## run isort to typecheck
+	source ./$</bin/activate ; set -u ;\
+  	isort --version ;\
+  	isort --profile black -m 3 -l 88 --lai 2 --ca --tc $(PYTHON_FILES)
 
 black: $(VENV_NAME) ## run black on python files in check mode
 	source ./$</bin/activate ; set -u ;\
-  black --version ;\
-  black --check $(PYTHON_FILES)
+  	black --version ;\
+  	black --check $(PYTHON_FILES)
 
 blacken: $(VENV_NAME) ## run black on python files to reformat
 	source ./$</bin/activate ; set -u ;\
-  black --version ;\
-  black $(PYTHON_FILES)
+  	black --version ;\
+  	black $(PYTHON_FILES)
 
 twine: # @HELP install twine if not present
 	python -m pip install --upgrade twine
@@ -72,7 +81,7 @@ build-tools: # @HELP install the ONOS build tools if needed
 	@if [ ! -d "../build-tools" ]; then cd .. && git clone https://github.com/onosproject/build-tools.git; fi
 
 clean:  ## Remove build/test temp files
-	rm -rf dist junit-results.xml .coverage coverage.xml onos_ric_sdk_python.egg-info .tox
+	rm -rf dist docs/_build junit-results.xml .coverage coverage.xml .mypy_cache .pytest_cache onos_ric_sdk_python.egg-info
 
 clean-all: clean ## clean + remove virtualenv
 	rm -rf $(VENV_NAME)

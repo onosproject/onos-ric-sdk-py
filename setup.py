@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import absolute_import
+
 from setuptools import setup
 
 
@@ -28,12 +29,16 @@ setup(
     author="Open Networking Foundation and Partners",
     author_email="support@opennetworking.org",
     packages=["onos_ric_sdk_py"],
+    package_data={"onos_ric_sdk_py": ["py.typed"]},
+    include_package_data=True,
     license="Apache v2",
     install_requires=parse_requirements("requirements.txt"),
     classifiers=[
+        "Framework :: AsyncIO",
         "License :: OSI Approved :: Apache Software License",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
+        "Typing :: Typed",
     ],
 )

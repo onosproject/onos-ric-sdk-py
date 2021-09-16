@@ -1,0 +1,176 @@
+# SPDX-FileCopyrightText: © 2021 Open Networking Foundation <support@opennetworking.org>
+# SPDX-License-Identifier: Apache-2.0
+
+components: null
+info:
+  description: Swagger API definition
+  title: Swagger API
+  version: 1.0.0
+openapi: 3.0.1
+paths:
+  /config:
+    get:
+      description: Return the current service configuration settings.
+      responses:
+        '200':
+          content:
+            application/json:
+              example:
+                foo:
+                - bar
+                - baz
+                timeout: 15
+          description: Successful operation.
+        '500':
+          description: Failed to load or parse the configuration file.
+      tags:
+      - Configuration
+    head:
+      description: Return the current service configuration settings.
+      responses:
+        '200':
+          content:
+            application/json:
+              example:
+                foo:
+                - bar
+                - baz
+                timeout: 15
+          description: Successful operation.
+        '500':
+          description: Failed to load or parse the configuration file.
+      tags:
+      - Configuration
+    patch:
+      description: Partially update the service's configuration settings.
+      requestBody:
+        content:
+          application/json:
+            example:
+              config:
+                timeout: 60
+        description: New service configuration object
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              example:
+                foo:
+                - bar
+                - baz
+                timeout: 60
+          description: Successful operation.
+        '400':
+          description: Missing or invalid 'config' parameter.
+        '500':
+          description: Failed to update service configuration.
+      tags:
+      - Configuration
+    put:
+      description: Completely overwrite the service's configuration settings.
+      requestBody:
+        content:
+          application/json:
+            example:
+              config:
+                foo:
+                - bar
+                - baz
+                timeout: 30
+        description: New service configuration object
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              example:
+                foo:
+                - bar
+                - baz
+                timeout: 30
+          description: Successful operation.
+        '400':
+          description: Missing or invalid 'config' parameter.
+        '500':
+          description: Failed to overwrite service configuration.
+      tags:
+      - Configuration
+  /log/{level}:
+    put:
+      description: Dynamically set the service's log level.
+      parameters:
+      - description: The new log level.
+        in: path
+        name: level
+        required: true
+        schema:
+          enum:
+          - DEBUG
+          - INFO
+          - WARNING
+          - ERROR
+          - FATAL
+          type: string
+      responses:
+        '200':
+          content:
+            text/plain:
+              example: Log level set to WARNING from INFO
+          description: Successful operation.
+        '400':
+          description: Invalid log level.
+      tags:
+      - Configuration
+  /metrics:
+    get:
+      description: Scrape the service's Prometheus metrics cache.
+      responses:
+        '200':
+          content:
+            text/plain:
+              example: 'python_gc_objects_collected_total{generation="0"} 479.0
+
+                python_gc_objects_collected_total{generation="1"} 260.0
+
+                python_gc_objects_collected_total{generation="2"} 0.0'
+          description: Successful operation.
+      tags:
+      - Prometheus
+    head:
+      description: Scrape the service's Prometheus metrics cache.
+      responses:
+        '200':
+          content:
+            text/plain:
+              example: 'python_gc_objects_collected_total{generation="0"} 479.0
+
+                python_gc_objects_collected_total{generation="1"} 260.0
+
+                python_gc_objects_collected_total{generation="2"} 0.0'
+          description: Successful operation.
+      tags:
+      - Prometheus
+  /status:
+    get:
+      description: Check if the webserver is responsive.
+      responses:
+        '200':
+          content:
+            text/plain:
+              example: Alive
+          description: Successful operation.
+      tags:
+      - Health
+    head:
+      description: Check if the webserver is responsive.
+      responses:
+        '200':
+          content:
+            text/plain:
+              example: Alive
+          description: Successful operation.
+      tags:
+      - Health
+servers:
+- url: /
