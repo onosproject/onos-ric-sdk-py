@@ -27,11 +27,12 @@ from .exceptions import ClientRuntimeError, ClientStoppedError
 
 class E2Client:
     INSTANCE_ID = os.getenv("HOSTNAME", "")
+    PROXY_ENDPOINT = "localhost:5151"
 
     def __init__(
         self,
         app_id: str,
-        e2t_endpoint: str,
+        e2t_endpoint: str,  # Deprecated
         ca_path: Optional[str] = None,
         cert_path: Optional[str] = None,
         key_path: Optional[str] = None,
@@ -47,7 +48,8 @@ class E2Client:
             ssl_context.load_cert_chain(certfile=cert_path, keyfile=key_path)
             ssl_context.check_hostname = not skip_verify
 
-        e2t_ip, e2t_port = e2t_endpoint.rsplit(":", 1)
+        # Connect to sidecar proxy on localhost:5151
+        e2t_ip, e2t_port = self.PROXY_ENDPOINT.rsplit(":", 1)
         self._e2t_channel = Channel(e2t_ip, int(e2t_port), ssl=ssl_context)
         self._ready = True
 
