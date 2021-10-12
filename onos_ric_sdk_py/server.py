@@ -69,7 +69,7 @@ async def handle_get_config(request: web.Request) -> web.Response:
         description: Failed to load or parse the configuration file.
     """
     try:
-        with open(request.app["path"]) as f:
+        with open(request.app["path"], encoding="utf-8") as f:
             config = json.load(f)
             return web.json_response(config)
     except json.JSONDecodeError:
@@ -123,7 +123,7 @@ async def handle_set_config(request: web.Request) -> web.Response:
         raise web.HTTPBadRequest(text="Invalid value for 'config': Not object")
 
     try:
-        with open(request.app["path"], "w") as f:
+        with open(request.app["path"], "w", encoding="utf-8") as f:
             json.dump(config, f)
 
         # Trigger the shutdown event
@@ -173,7 +173,7 @@ async def handle_update_config(request: web.Request) -> web.Response:
         raise web.HTTPBadRequest(text="Invalid value for 'config': Not object")
 
     try:
-        with open(request.app["path"], "r+") as f:
+        with open(request.app["path"], "r+", encoding="utf-8") as f:
             config = json.load(f)
 
             # Deeply merge the updates onto the base config
