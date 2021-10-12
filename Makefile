@@ -52,7 +52,7 @@ flake8: $(VENV_NAME) ## check python formatting with flake8
 pylint: $(VENV_NAME) ## pylint check for python 3 compliance
 	source ./$</bin/activate ; set -u ;\
   	pylint --version ;\
-  	pylint --py3k $(PYTHON_FILES)
+  	pylint --rcfile=pylint.ini $(PYTHON_FILES)
 
 mypy: $(VENV_NAME) ## run mypy to typecheck
 	source ./$</bin/activate ; set -u ;\
