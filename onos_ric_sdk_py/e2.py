@@ -3,6 +3,7 @@
 
 from __future__ import absolute_import
 
+import asyncio
 import os
 import ssl
 from types import TracebackType
@@ -28,6 +29,8 @@ from .exceptions import ClientRuntimeError, ClientStoppedError
 class E2Client:
     INSTANCE_ID = os.getenv("HOSTNAME", "")
     PROXY_ENDPOINT = "localhost:5151"
+    RETRY_COUNT = 5
+    RETRY_DELAY = 0.1
 
     def __init__(
         self,
@@ -91,14 +94,18 @@ class E2Client:
             encoding=Encoding.PROTO,
         )
 
-        try:
-            response = await client.control(
-                headers=headers,
-                message=ControlMessage(header=header, payload=message),
-            )
-            return response.outcome.payload
-        except GRPCError as e:
-            raise ClientRuntimeError() from e
+        for retry_idx in range(self.RETRY_COUNT):
+            try:
+                response = await client.control(
+                    headers=headers,
+                    message=ControlMessage(header=header, payload=message),
+                )
+                return response.outcome.payload
+            except GRPCError as e:
+                raise ClientRuntimeError() from e
+            except OSError:
+                logging.exception(f"OSError retry {retry_idx + 1}")
+                await asyncio.sleep(self.RETRY_DELAY * retry_idx)
 
     async def subscribe(
         self,
@@ -144,11 +151,19 @@ class E2Client:
             event_trigger=EventTrigger(payload=trigger),
         )
 
-        stream = client.subscribe(
-            headers=headers, transaction_id=subscription_id, subscription=subscription
-        )
-        async for response in stream:
-            yield response.indication.header, response.indication.payload
+        for retry_idx in range(self.RETRY_COUNT):
+            try:
+                stream = client.subscribe(
+                    headers=headers,
+                    transaction_id=subscription_id,
+                    subscription=subscription,
+                )
+                async for response in stream:
+                    yield response.indication.header, response.indication.payload
+                break
+            except OSError:
+                logging.exception(f"OSError retry {retry_idx + 1}")
+                await asyncio.sleep(self.RETRY_DELAY * retry_idx)
 
     async def unsubscribe(
         self,
@@ -183,10 +198,16 @@ class E2Client:
             encoding=Encoding.PROTO,
         )
 
-        try:
-            await client.unsubscribe(headers=headers, transaction_id=subscription_id)
-        except GRPCError as e:
-            raise ClientRuntimeError() from e
+        for retry_idx in range(self.RETRY_COUNT):
+            try:
+                await client.unsubscribe(
+                    headers=headers, transaction_id=subscription_id
+                )
+            except GRPCError as e:
+                raise ClientRuntimeError() from e
+            except OSError:
+                logging.exception(f"OSError retry {retry_idx + 1}")
+                await asyncio.sleep(self.RETRY_DELAY * retry_idx)
 
     async def __aenter__(self) -> "E2Client":
         """Create any underlying resources required for the client to run."""
