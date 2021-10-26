@@ -4,6 +4,7 @@
 from __future__ import absolute_import
 
 import asyncio
+import logging
 import os
 import ssl
 from types import TracebackType
@@ -29,7 +30,7 @@ from .exceptions import ClientRuntimeError, ClientStoppedError
 class E2Client:
     INSTANCE_ID = os.getenv("HOSTNAME", "")
     PROXY_ENDPOINT = "localhost:5151"
-    RETRY_COUNT = 5
+    RETRY_COUNT = 10
     RETRY_DELAY = 0.1
 
     def __init__(
@@ -106,6 +107,7 @@ class E2Client:
             except OSError:
                 logging.exception(f"OSError retry {retry_idx + 1}")
                 await asyncio.sleep(self.RETRY_DELAY * retry_idx)
+        raise ClientRuntimeError("control exceeded retries")
 
     async def subscribe(
         self,
@@ -160,10 +162,11 @@ class E2Client:
                 )
                 async for response in stream:
                     yield response.indication.header, response.indication.payload
-                break
+                return
             except OSError:
                 logging.exception(f"OSError retry {retry_idx + 1}")
                 await asyncio.sleep(self.RETRY_DELAY * retry_idx)
+        raise ClientRuntimeError("subscribe exceeded retries")
 
     async def unsubscribe(
         self,
@@ -203,11 +206,13 @@ class E2Client:
                 await client.unsubscribe(
                     headers=headers, transaction_id=subscription_id
                 )
+                return
             except GRPCError as e:
                 raise ClientRuntimeError() from e
             except OSError:
                 logging.exception(f"OSError retry {retry_idx + 1}")
                 await asyncio.sleep(self.RETRY_DELAY * retry_idx)
+        raise ClientRuntimeError("unsubscribe exceeded retries")
 
     async def __aenter__(self) -> "E2Client":
         """Create any underlying resources required for the client to run."""

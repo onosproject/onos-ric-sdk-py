@@ -5,6 +5,7 @@ from __future__ import absolute_import
 
 import asyncio
 import json
+import logging
 import ssl
 from types import TracebackType
 from typing import Any, AsyncIterator, Dict, List, Optional, Tuple, Type
@@ -33,7 +34,7 @@ from .exceptions import ClientRuntimeError, ClientStoppedError
 
 
 class SDLClient:
-    RETRY_COUNT = 5
+    RETRY_COUNT = 10
     RETRY_DELAY = 0.1
 
     def __init__(
@@ -98,6 +99,7 @@ class SDLClient:
             except OSError:
                 logging.exception(f"OSError retry {retry_idx + 1}")
                 await asyncio.sleep(self.RETRY_DELAY * retry_idx)
+        raise ClientRuntimeError("get_cells exceeded retries")
 
     async def _get_cell_entity_id(
         self, e2_node_id: str, cell_global_id: str
@@ -129,14 +131,13 @@ class SDLClient:
                     e2_cell = E2Cell().from_json(aspects)
                     if e2_cell.cell_global_id.value == cell_global_id:
                         return obj.id
-                break
+                return None
             except GRPCError as e:
                 raise ClientRuntimeError() from e
             except OSError:
                 logging.exception(f"OSError retry {retry_idx + 1}")
                 await asyncio.sleep(self.RETRY_DELAY * retry_idx)
-
-        return None
+        raise ClientRuntimeError("_get_cell_entity_id exceeded retries")
 
     async def get_cell_data(
         self, e2_node_id: str, cell_id: str, keys: List[str]
@@ -154,15 +155,10 @@ class SDLClient:
             return None
 
         client = TopoStub(self._topo_channel)
-        for retry_idx in range(self.RETRY_COUNT):
-            try:
-                resp = await client.get(id=entity_id)
-                break
-            except GRPCError as e:
-                raise ClientRuntimeError() from e
-            except OSError:
-                logging.exception(f"OSError retry {retry_idx + 1}")
-                await asyncio.sleep(self.RETRY_DELAY * retry_idx)
+        try:
+            resp = await client.get(id=entity_id)
+        except GRPCError as e:
+            raise ClientRuntimeError() from e
 
         data: List[Optional[bytes]] = []
         for k in keys:
@@ -194,15 +190,10 @@ class SDLClient:
             )
 
         client = TopoStub(self._topo_channel)
-        for retry_idx in range(self.RETRY_COUNT):
-            try:
-                resp = await client.get(id=entity_id)
-                break
-            except GRPCError as e:
-                raise ClientRuntimeError() from e
-            except OSError:
-                logging.exception(f"OSError retry {retry_idx + 1}")
-                await asyncio.sleep(self.RETRY_DELAY * retry_idx)
+        try:
+            resp = await client.get(id=entity_id)
+        except GRPCError as e:
+            raise ClientRuntimeError() from e
 
         op_count = 0
         for key, data in key_data_map.items():
@@ -221,15 +212,10 @@ class SDLClient:
         if op_count == 0:
             return
 
-        for retry_idx in range(self.RETRY_COUNT):
-            try:
-                await client.update(object=resp.object)
-                break
-            except GRPCError as e:
-                raise ClientRuntimeError() from e
-            except OSError:
-                logging.exception(f"OSError retry {retry_idx + 1}")
-                await asyncio.sleep(self.RETRY_DELAY * retry_idx)
+        try:
+            await client.update(object=resp.object)
+        except GRPCError as e:
+            raise ClientRuntimeError() from e
 
     async def watch_e2_connections(self) -> AsyncIterator[Tuple[str, E2Node]]:
         """Stream for newly available E2 node connections.
@@ -286,12 +272,13 @@ class SDLClient:
                             e2_node.service_models[oid].ran_functions = ran_functions
 
                         yield e2_node_id, e2_node
-                break
+                return
             except GRPCError as e:
                 raise ClientRuntimeError() from e
             except OSError:
                 logging.exception(f"OSError retry {retry_idx + 1}")
                 await asyncio.sleep(self.RETRY_DELAY * retry_idx)
+        raise ClientRuntimeError("watch_e2_connections exceeded retries")
 
     async def __aenter__(self) -> "SDLClient":
         """Create any underlying resources required for the client to run."""
