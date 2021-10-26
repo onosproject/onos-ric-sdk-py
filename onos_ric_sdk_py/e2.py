@@ -6,9 +6,7 @@ from __future__ import absolute_import
 import asyncio
 import logging
 import os
-import socket
 import ssl
-import time
 from types import TracebackType
 from typing import AsyncIterator, List, Optional, Tuple, Type
 
