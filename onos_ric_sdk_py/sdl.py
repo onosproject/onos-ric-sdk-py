@@ -3,9 +3,7 @@
 
 from __future__ import absolute_import
 
-import asyncio
 import json
-import logging
 import ssl
 from types import TracebackType
 from typing import Any, AsyncIterator, Dict, List, Optional, Tuple, Type
@@ -34,9 +32,6 @@ from .exceptions import ClientRuntimeError, ClientStoppedError
 
 
 class SDLClient:
-    RETRY_COUNT = 10
-    RETRY_DELAY = 0.1
-
     def __init__(
         self,
         topo_endpoint: str,
@@ -82,24 +77,19 @@ class SDLClient:
             )
         )
 
-        for retry_idx in range(self.RETRY_COUNT):
-            cells = []
-            try:
-                response = await client.list(filters=filters)
-                for obj in response.objects:
-                    if obj.entity.kind_id != RanEntityKinds.E2CELL.name.lower():
-                        continue
+        cells = []
+        try:
+            response = await client.list(filters=filters)
+            for obj in response.objects:
+                if obj.entity.kind_id != RanEntityKinds.E2CELL.name.lower():
+                    continue
 
-                    aspects = obj.aspects["onos.topo.E2Cell"].value
-                    e2_cell = E2Cell().from_json(aspects)
-                    cells.append(e2_cell)
-                return cells
-            except GRPCError as e:
-                raise ClientRuntimeError() from e
-            except OSError:
-                logging.exception(f"OSError retry {retry_idx + 1}")
-                await asyncio.sleep(self.RETRY_DELAY * retry_idx)
-        raise ClientRuntimeError("get_cells exceeded retries")
+                aspects = obj.aspects["onos.topo.E2Cell"].value
+                e2_cell = E2Cell().from_json(aspects)
+                cells.append(e2_cell)
+            return cells
+        except GRPCError as e:
+            raise ClientRuntimeError() from e
 
     async def _get_cell_entity_id(
         self, e2_node_id: str, cell_global_id: str
@@ -120,24 +110,20 @@ class SDLClient:
             )
         )
 
-        for retry_idx in range(self.RETRY_COUNT):
-            try:
-                response = await client.list(filters=filters)
-                for obj in response.objects:
-                    if obj.entity.kind_id != RanEntityKinds.E2CELL.name.lower():
-                        continue
+        try:
+            response = await client.list(filters=filters)
+            for obj in response.objects:
+                if obj.entity.kind_id != RanEntityKinds.E2CELL.name.lower():
+                    continue
 
-                    aspects = obj.aspects["onos.topo.E2Cell"].value
-                    e2_cell = E2Cell().from_json(aspects)
-                    if e2_cell.cell_global_id.value == cell_global_id:
-                        return obj.id
-                return None
-            except GRPCError as e:
-                raise ClientRuntimeError() from e
-            except OSError:
-                logging.exception(f"OSError retry {retry_idx + 1}")
-                await asyncio.sleep(self.RETRY_DELAY * retry_idx)
-        raise ClientRuntimeError("_get_cell_entity_id exceeded retries")
+                aspects = obj.aspects["onos.topo.E2Cell"].value
+                e2_cell = E2Cell().from_json(aspects)
+                if e2_cell.cell_global_id.value == cell_global_id:
+                    return obj.id
+        except GRPCError as e:
+            raise ClientRuntimeError() from e
+
+        return None
 
     async def get_cell_data(
         self, e2_node_id: str, cell_id: str, keys: List[str]
@@ -237,48 +223,40 @@ class SDLClient:
             )
         )
 
-        for retry_idx in range(self.RETRY_COUNT):
-            try:
-                async for response in client.watch(filters=filters):
-                    event = response.event
-                    if event.type in (EventType.ADDED, EventType.NONE):
-                        e2_node_id = event.object.relation.tgt_entity_id
-                        get_response = await client.get(id=e2_node_id)
-                        aspects = get_response.object.aspects["onos.topo.E2Node"].value
+        try:
+            async for response in client.watch(filters=filters):
+                event = response.event
+                if event.type in (EventType.ADDED, EventType.NONE):
+                    e2_node_id = event.object.relation.tgt_entity_id
+                    get_response = await client.get(id=e2_node_id)
+                    aspects = get_response.object.aspects["onos.topo.E2Node"].value
 
-                        # Also decode manually because betterproto can't parse 'Any' from JSON
-                        e2_node = E2Node().from_json(aspects)
-                        e2_node_json = json.loads(aspects.decode())
+                    # Also decode manually because betterproto can't parse 'Any' from JSON
+                    e2_node = E2Node().from_json(aspects)
+                    e2_node_json = json.loads(aspects.decode())
 
-                        for oid, sm in e2_node_json["serviceModels"].items():
-                            ran_functions = []
-                            for func_dict in sm.get("ranFunctions", []):
-                                type_url = func_dict.pop("@type")
-                                if type_url.endswith("KPMRanFunction"):
-                                    func: Any = KpmRanFunction().from_dict(func_dict)
-                                elif type_url.endswith("MHORanFunction"):
-                                    func = MhoRanFunction().from_dict(func_dict)
-                                elif type_url.endswith("RCRanFunction"):
-                                    func = RcRanFunction().from_dict(func_dict)
-                                elif type_url.endswith("RSMRanFunction"):
-                                    func = RsmRanFunction().from_dict(func_dict)
-                                else:
-                                    raise ValueError(
-                                        f"Unknown RAN function: {type_url}"
-                                    )
+                    for oid, sm in e2_node_json["serviceModels"].items():
+                        ran_functions = []
+                        for func_dict in sm.get("ranFunctions", []):
+                            type_url = func_dict.pop("@type")
+                            if type_url.endswith("KPMRanFunction"):
+                                func: Any = KpmRanFunction().from_dict(func_dict)
+                            elif type_url.endswith("MHORanFunction"):
+                                func = MhoRanFunction().from_dict(func_dict)
+                            elif type_url.endswith("RCRanFunction"):
+                                func = RcRanFunction().from_dict(func_dict)
+                            elif type_url.endswith("RSMRanFunction"):
+                                func = RsmRanFunction().from_dict(func_dict)
+                            else:
+                                raise ValueError(f"Unknown RAN function: {type_url}")
 
-                                ran_functions.append(func)
+                            ran_functions.append(func)
 
-                            e2_node.service_models[oid].ran_functions = ran_functions
+                        e2_node.service_models[oid].ran_functions = ran_functions
 
-                        yield e2_node_id, e2_node
-                return
-            except GRPCError as e:
-                raise ClientRuntimeError() from e
-            except OSError:
-                logging.exception(f"OSError retry {retry_idx + 1}")
-                await asyncio.sleep(self.RETRY_DELAY * retry_idx)
-        raise ClientRuntimeError("watch_e2_connections exceeded retries")
+                    yield e2_node_id, e2_node
+        except GRPCError as e:
+            raise ClientRuntimeError() from e
 
     async def __aenter__(self) -> "SDLClient":
         """Create any underlying resources required for the client to run."""
