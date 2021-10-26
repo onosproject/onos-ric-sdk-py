@@ -30,7 +30,7 @@ from .exceptions import ClientRuntimeError, ClientStoppedError
 class E2Client:
     INSTANCE_ID = os.getenv("HOSTNAME", "")
     PROXY_ENDPOINT = "localhost:5151"
-    RETRY_COUNT = 10
+    RETRY_COUNT = 20
     RETRY_DELAY = 0.1
 
     def __init__(
