@@ -6,7 +6,9 @@ from __future__ import absolute_import
 import asyncio
 import logging
 import os
+import socket
 import ssl
+import time
 from types import TracebackType
 from typing import AsyncIterator, List, Optional, Tuple, Type
 
@@ -107,7 +109,8 @@ class E2Client:
             except OSError:
                 logging.exception(f"OSError retry {retry_idx + 1}")
                 await asyncio.sleep(self.RETRY_DELAY * retry_idx)
-        raise ClientRuntimeError("control exceeded retries")
+        else:
+            raise ClientRuntimeError("control exceeded retries")
 
     async def subscribe(
         self,
@@ -162,11 +165,12 @@ class E2Client:
                 )
                 async for response in stream:
                     yield response.indication.header, response.indication.payload
-                return
+                break
             except OSError:
                 logging.exception(f"OSError retry {retry_idx + 1}")
                 await asyncio.sleep(self.RETRY_DELAY * retry_idx)
-        raise ClientRuntimeError("subscribe exceeded retries")
+        else:
+            raise ClientRuntimeError("subscribe exceeded retries")
 
     async def unsubscribe(
         self,
@@ -206,13 +210,14 @@ class E2Client:
                 await client.unsubscribe(
                     headers=headers, transaction_id=subscription_id
                 )
-                return
+                break
             except GRPCError as e:
                 raise ClientRuntimeError() from e
             except OSError:
                 logging.exception(f"OSError retry {retry_idx + 1}")
                 await asyncio.sleep(self.RETRY_DELAY * retry_idx)
-        raise ClientRuntimeError("unsubscribe exceeded retries")
+        else:
+            raise ClientRuntimeError("unsubscribe exceeded retries")
 
     async def __aenter__(self) -> "E2Client":
         """Create any underlying resources required for the client to run."""
