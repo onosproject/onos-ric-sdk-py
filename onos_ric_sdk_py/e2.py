@@ -105,10 +105,9 @@ class E2Client:
             except GRPCError as e:
                 raise ClientRuntimeError() from e
             except OSError:
-                logging.exception(f"OSError retry {retry_idx + 1}")
+                logging.exception("OSError retry %s", retry_idx + 1)
                 await asyncio.sleep(self.RETRY_DELAY * retry_idx)
-        else:
-            raise ClientRuntimeError("control exceeded retries")
+        raise ClientRuntimeError("control exceeded retries")
 
     async def subscribe(
         self,
@@ -165,7 +164,7 @@ class E2Client:
                     yield response.indication.header, response.indication.payload
                 break
             except OSError:
-                logging.exception(f"OSError retry {retry_idx + 1}")
+                logging.exception("OSError retry %s", retry_idx + 1)
                 await asyncio.sleep(self.RETRY_DELAY * retry_idx)
         else:
             raise ClientRuntimeError("subscribe exceeded retries")
@@ -212,7 +211,7 @@ class E2Client:
             except GRPCError as e:
                 raise ClientRuntimeError() from e
             except OSError:
-                logging.exception(f"OSError retry {retry_idx + 1}")
+                logging.exception("OSError retry %s", retry_idx + 1)
                 await asyncio.sleep(self.RETRY_DELAY * retry_idx)
         else:
             raise ClientRuntimeError("unsubscribe exceeded retries")
