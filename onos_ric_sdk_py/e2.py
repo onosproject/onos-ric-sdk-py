@@ -161,7 +161,8 @@ class E2Client:
                     subscription=subscription,
                 )
                 async for response in stream:
-                    yield response.indication.header, response.indication.payload
+                    if int(len(response.indication.header)) != 0:
+                        yield response.indication.header, response.indication.payload
                 break
             except OSError:
                 logging.exception("OSError retry %s", retry_idx + 1)
