@@ -17,6 +17,9 @@ VIRTUALENV        ?= python3 -m venv
 # Create the virtualenv with distribution and additional testing tools installed
 VENV_NAME = venv_orsp
 
+build-tools:=$(shell if [ ! -d "./build/build-tools" ]; then mkdir -p build && cd build && git clone https://github.com/onosproject/build-tools.git; fi)
+include ./build/build-tools/make/onf-common.mk
+
 $(VENV_NAME): requirements.txt
 	$(VIRTUALENV) $@ ;\
   source ./$@/bin/activate ; set -u ;\
@@ -38,11 +41,6 @@ lint: license black flake8 isort pylint mypy ## run static lint checks
 test: $(VENV_NAME) ## run unit tests with pytest
 	source ./$</bin/activate ; set -u ;\
 	pytest --cov=onos_ric_sdk_py --junit-xml=junit-results.xml --cov-report=xml tests/
-
-license: $(VENV_NAME) ## check license with the reuse tool
-	source ./$</bin/activate ; set -u ;\
-  	reuse --version ;\
-  	reuse --root . lint
 
 flake8: $(VENV_NAME) ## check python formatting with flake8
 	source ./$</bin/activate ; set -u ;\
@@ -74,13 +72,7 @@ blacken: $(VENV_NAME) ## run black on python files to reformat
   	black --version ;\
   	black $(PYTHON_FILES)
 
-twine: # @HELP install twine if not present
-	python -m pip install --upgrade twine
-
-build-tools: # @HELP install the ONOS build tools if needed
-	@if [ ! -d "../build-tools" ]; then cd .. && git clone https://github.com/onosproject/build-tools.git; fi
-
-clean:  ## Remove build/test temp files
+clean::  ## Remove build/test temp files
 	rm -rf dist docs/_build junit-results.xml .coverage coverage.xml .mypy_cache .pytest_cache onos_ric_sdk_python.egg-info
 
 clean-all: clean ## clean + remove virtualenv
@@ -90,11 +82,5 @@ publish: twine # @HELP publish version on github and PyPI
 	BASEDIR=. PYPI_INDEX=pypi ./../build-tools/publish-python-version
 	./../build-tools/publish-version ${VERSION}
 
-jenkins-publish: build-tools # @HELP Jenkins calls this to publish artifacts
+jenkins-publish: # @HELP Jenkins calls this to publish artifacts
 	../build-tools/release-merge-commit
-
-help: ## Print help for each target
-	@echo  onos-ric-sdk-py make targets
-	@echo
-	@grep '^[[:alnum:]_-]*:.* ##' $(MAKEFILE_LIST) \
-    | sort | awk 'BEGIN {FS=":.* ## "}; {printf "%-25s %s\n", $$1, $$2};'
