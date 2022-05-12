@@ -229,7 +229,10 @@ class SDLClient:
                 if event.type in (EventType.ADDED, EventType.NONE):
                     e2_node_id = event.object.relation.tgt_entity_id
                     get_response = await client.get(id=e2_node_id)
-                    aspects = get_response.object.aspects["onos.topo.E2Node"].value
+                    aspect = get_response.object.aspects.get("onos.topo.E2Node")
+                    if aspect is None:
+                        continue
+                    aspects = aspect.value
 
                     # Also decode manually because betterproto can't parse 'Any' from JSON
                     e2_node = E2Node().from_json(aspects)
